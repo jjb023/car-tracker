@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}Car Tracker{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="container">
+      <nav>
+        <ul>
+          <li><strong><a href="/">Car Tracker</a></strong></li>
+        </ul>
+        {% if logged_in %}
+        <ul>
+          <li><a href="/">Dashboard</a></li>
+          <li><a href="/cars">Cars</a></li>
+          <li><a href="/bookings">Bookings</a></li>
+          <li><a href="/admin">Admin</a></li>
+          <li>
+            <form method="post" action="/logout" style="display:inline">
+              <button class="secondary" type="submit">Log out</button>
+            </form>
+          </li>
+        </ul>
+        {% endif %}
+      </nav>
+    </header>
+    <main class="container">
+      {% if flash %}<article class="flash">{{ flash }}</article>{% endif %}
+      {% block content %}{% endblock %}
+    </main>
+    <footer class="container"><small>Car Tracker &middot; internal use only</small></footer>
+  </body>
+</html>
