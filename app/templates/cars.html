@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Cars &middot; Car Tracker{% endblock %}
+{% block content %}
+<hgroup>
+  <h2>Cars</h2>
+  <p>Every car we know about.</p>
+</hgroup>
+
+<details>
+  <summary role="button" class="secondary">Add a car</summary>
+  <form method="post" action="/cars">
+    <div class="grid">
+      <label>Reg<input name="reg" required maxlength="20" /></label>
+      <label>Make / model<input name="make_model" maxlength="100" /></label>
+    </div>
+    <label>Notes<textarea name="notes" rows="2" maxlength="1000"></textarea></label>
+    <button type="submit">Create</button>
+  </form>
+</details>
+
+<form method="get" action="/cars">
+  <input type="search" name="q" placeholder="Search by reg" value="{{ q or '' }}" />
+</form>
+
+<table>
+  <thead>
+    <tr>
+      <th>Reg</th><th>Make / model</th><th>Current location</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for car, loc in cars %}
+    <tr>
+      <td><a href="/cars/{{ car.id }}"><strong>{{ car.reg }}</strong></a>{% if car.archived %} <small>(archived)</small>{% endif %}</td>
+      <td>{{ car.make_model }}</td>
+      <td>
+        {% if loc and loc.space %}
+          {{ loc.space.building.name }} &middot; {{ loc.space.name }}
+        {% else %}
+          <em>Off-site</em>
+        {% endif %}
+      </td>
+      <td><a href="/cars/{{ car.id }}">Open</a></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4"><em>No cars match.</em></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

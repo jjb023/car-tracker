@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Bookings &middot; Car Tracker{% endblock %}
+{% block content %}
+<hgroup>
+  <h2>Bookings</h2>
+  <p>Dyno / emissions / bay reservations.</p>
+</hgroup>
+
+<article>
+  <header><strong>New booking</strong></header>
+  {% if error %}<p style="color:var(--pico-del-color)">{{ error }}</p>{% endif %}
+  <form method="post" action="/bookings">
+    <div class="grid">
+      <label>Car
+        <select name="car_id" required>
+          {% for car in cars %}
+            <option value="{{ car.id }}" {% if form.car_id == car.id|string %}selected{% endif %}>{{ car.reg }} {% if car.make_model %}&mdash; {{ car.make_model }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Space
+        <select name="space_id" required>
+          {% for building in buildings %}
+            <optgroup label="{{ building.name }}">
+              {% for space in building.spaces %}
+                <option value="{{ space.id }}" {% if form.space_id == space.id|string %}selected{% endif %}>{{ space.name }} ({{ space.kind }})</option>
+              {% endfor %}
+            </optgroup>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <div class="grid">
+      <label>Start<input type="datetime-local" name="start_at" value="{{ form.start_at or '' }}" required /></label>
+      <label>End<input type="datetime-local" name="end_at" value="{{ form.end_at or '' }}" required /></label>
+    </div>
+    <div class="grid">
+      <label>Purpose<input name="purpose" value="{{ form.purpose or '' }}" maxlength="200" placeholder="Dyno run, emissions test…" /></label>
+      <label>Booked by<input name="created_by" value="{{ form.created_by or '' }}" maxlength="100" placeholder="Your name / initials" /></label>
+    </div>
+    <label>Notes<textarea name="notes" rows="2" maxlength="1000">{{ form.notes or '' }}</textarea></label>
+    <button type="submit">Create booking</button>
+  </form>
+</article>
+
+<h3>Upcoming &amp; active</h3>
+{% if upcoming_by_day %}
+  {% for day, day_bookings in upcoming_by_day %}
+    <article>
+      <header><strong>{{ day.strftime("%A, %d %b %Y") }}</strong></header>
+      <table>
+        <thead><tr><th>Car</th><th>Space</th><th>Time</th><th>Purpose</th><th>Booked by</th><th></th></tr></thead>
+        <tbody>
+          {% for b in day_bookings %}
+          <tr>
+            <td><a href="/cars/{{ b.car.id }}">{{ b.car.reg }}</a></td>
+            <td>{{ b.space.building.name }} &middot; {{ b.space.name }}</td>
+            <td>{{ b.start_at.strftime("%H:%M") }}&ndash;{{ b.end_at.strftime("%H:%M") }}</td>
+            <td>{{ b.purpose }}</td>
+            <td>{{ b.created_by }}</td>
+            <td>
+              <form method="post" action="/bookings/{{ b.id }}/cancel" onsubmit="return confirm('Cancel this booking?')">
+                <button class="secondary" type="submit">Cancel</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </article>
+  {% endfor %}
+{% else %}
+  <p><em>Nothing booked.</em></p>
+{% endif %}
+
+{% if past %}
+<details>
+  <summary>Past bookings ({{ past|length }})</summary>
+  <table>
+    <thead><tr><th>Car</th><th>Space</th><th>Start</th><th>End</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for b in past %}
+      <tr>
+        <td>{{ b.car.reg }}</td>
+        <td>{{ b.space.building.name }} &middot; {{ b.space.name }}</td>
+        <td>{{ b.start_at.strftime("%Y-%m-%d %H:%M") }}</td>
+        <td>{{ b.end_at.strftime("%Y-%m-%d %H:%M") }}</td>
+        <td>{{ b.status }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</details>
+{% endif %}
+{% endblock %}

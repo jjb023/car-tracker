@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Dashboard &middot; Car Tracker{% endblock %}
+{% block content %}
+<hgroup>
+  <h2>Dashboard</h2>
+  <p>Where every car is, right now.</p>
+</hgroup>
+
+{% if not buildings %}
+<article>
+  <p>No buildings yet. Head to <a href="/admin">Admin</a> to create your first building and spaces.</p>
+</article>
+{% endif %}
+
+<div class="buildings-grid">
+  {% for building in buildings %}
+  <section class="building-card">
+    <h3>{{ building.name }}</h3>
+    {% if not building.spaces %}
+      <p><em>No spaces yet. Add one on the <a href="/admin">Admin</a> page.</em></p>
+    {% endif %}
+    {% for space in building.spaces %}
+      {% set cars = space_cars.get(space.id, []) %}
+      <article class="space">
+        <header>
+          <strong>{{ space.name }}</strong>
+          <small class="kind-{{ space.kind }}"> &middot; {{ space.kind }}</small>
+        </header>
+        {% if cars %}
+          <ul class="car-list">
+            {% for car in cars %}
+              <li>
+                <a href="/cars/{{ car.id }}"><strong>{{ car.reg }}</strong></a>
+                {% if car.make_model %}<small> &middot; {{ car.make_model }}</small>{% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p><small><em>Empty</em></small></p>
+        {% endif %}
+      </article>
+    {% endfor %}
+  </section>
+  {% endfor %}
+
+  <section class="building-card">
+    <h3>Off-site</h3>
+    {% if offsite_cars %}
+      <ul class="car-list">
+        {% for car in offsite_cars %}
+          <li>
+            <a href="/cars/{{ car.id }}"><strong>{{ car.reg }}</strong></a>
+            {% if car.make_model %}<small> &middot; {{ car.make_model }}</small>{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p><small><em>No cars off-site.</em></small></p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

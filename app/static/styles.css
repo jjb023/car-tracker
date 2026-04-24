@@ -1,0 +1,39 @@
+.buildings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+.building-card {
+  background: var(--pico-card-background-color);
+  border: 1px solid var(--pico-card-border-color);
+  border-radius: var(--pico-border-radius);
+  padding: 1rem;
+}
+.building-card > h3 {
+  margin-top: 0;
+}
+.building-card .space {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+}
+.building-card .space > header {
+  padding: 0;
+  margin-bottom: 0.25rem;
+  background: transparent;
+  border: 0;
+}
+.car-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+.car-list li {
+  padding: 0.15rem 0;
+}
+.kind-emissions { color: #b45309; }
+.kind-dyno { color: #7e22ce; }
+.kind-bay { color: #0369a1; }
+.kind-general, .kind-other { color: var(--pico-muted-color); }
+.flash {
+  background: var(--pico-ins-color, #dff0d8);
+}

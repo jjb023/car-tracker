@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}{{ car.reg }} &middot; Car Tracker{% endblock %}
+{% block content %}
+<hgroup>
+  <h2>{{ car.reg }}</h2>
+  <p>
+    {% if current_loc and current_loc.space %}
+      Currently at <strong>{{ current_loc.space.building.name }} &middot; {{ current_loc.space.name }}</strong>
+      (since {{ current_loc.arrived_at.strftime("%Y-%m-%d %H:%M") }} UTC)
+    {% else %}
+      Currently <strong>off-site</strong>.
+    {% endif %}
+  </p>
+</hgroup>
+
+{% if error %}<article style="color:var(--pico-del-color)">{{ error }}</article>{% endif %}
+
+<div class="grid">
+  <article>
+    <header><strong>Edit car</strong></header>
+    <form method="post" action="/cars/{{ car.id }}">
+      <label>Reg<input name="reg" value="{{ car.reg }}" required maxlength="20" /></label>
+      <label>Make / model<input name="make_model" value="{{ car.make_model }}" maxlength="100" /></label>
+      <label>Notes<textarea name="notes" rows="3" maxlength="1000">{{ car.notes }}</textarea></label>
+      <div class="grid">
+        <button type="submit">Save</button>
+        <button formaction="/cars/{{ car.id }}/archive" class="secondary" type="submit">
+          {% if car.archived %}Unarchive{% else %}Archive{% endif %}
+        </button>
+      </div>
+    </form>
+  </article>
+
+  <article>
+    <header><strong>Move</strong></header>
+    <form method="post" action="/cars/{{ car.id }}/move">
+      <label>Destination
+        <select name="space_id">
+          <option value="">&mdash; Off-site &mdash;</option>
+          {% for building in buildings %}
+            <optgroup label="{{ building.name }}">
+              {% for space in building.spaces %}
+                <option value="{{ space.id }}"
+                  {% if current_loc and current_loc.space_id == space.id %}selected{% endif %}>
+                  {{ space.name }} ({{ space.kind }})
+                </option>
+              {% endfor %}
+            </optgroup>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Notes (optional)<input name="notes" maxlength="500" /></label>
+      <button type="submit">Move</button>
+    </form>
+  </article>
+</div>
+
+<article>
+  <header><strong>Movement history</strong></header>
+  {% if car.locations %}
+  <table>
+    <thead><tr><th>Where</th><th>Arrived</th><th>Left</th><th>Notes</th></tr></thead>
+    <tbody>
+      {% for loc in car.locations %}
+      <tr>
+        <td>
+          {% if loc.space %}{{ loc.space.building.name }} &middot; {{ loc.space.name }}
+          {% else %}<em>Off-site</em>{% endif %}
+        </td>
+        <td>{{ loc.arrived_at.strftime("%Y-%m-%d %H:%M") }}</td>
+        <td>{% if loc.left_at %}{{ loc.left_at.strftime("%Y-%m-%d %H:%M") }}{% else %}<em>current</em>{% endif %}</td>
+        <td>{{ loc.notes }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p><em>No history yet.</em></p>{% endif %}
+</article>
+
+<article>
+  <header><strong>Bookings</strong></header>
+  {% if bookings %}
+  <table>
+    <thead><tr><th>Space</th><th>Start</th><th>End</th><th>Purpose</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for b in bookings %}
+      <tr>
+        <td>{{ b.space.building.name }} &middot; {{ b.space.name }}</td>
+        <td>{{ b.start_at.strftime("%Y-%m-%d %H:%M") }}</td>
+        <td>{{ b.end_at.strftime("%Y-%m-%d %H:%M") }}</td>
+        <td>{{ b.purpose }}</td>
+        <td>{{ b.status }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p><em>No bookings for this car.</em></p>{% endif %}
+</article>
+
+<p><a href="/cars">&larr; All cars</a></p>
+{% endblock %}
