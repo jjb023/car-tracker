@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Admin &middot; Car Tracker{% endblock %}
+{% block content %}
+<hgroup>
+  <h2>Admin</h2>
+  <p>Buildings and spaces.</p>
+</hgroup>
+
+{% if error %}<article style="color:var(--pico-del-color)">{{ error }}</article>{% endif %}
+
+<article>
+  <header><strong>Add building</strong></header>
+  <form method="post" action="/buildings">
+    <div class="grid">
+      <label>Name<input name="name" required maxlength="100" /></label>
+      <button type="submit">Add building</button>
+    </div>
+  </form>
+</article>
+
+{% for building in buildings %}
+<article>
+  <header>
+    <strong>{{ building.name }}</strong>
+    <form method="post" action="/buildings/{{ building.id }}/delete" style="float:right"
+          onsubmit="return confirm('Delete {{ building.name }} and all its spaces?')">
+      <button class="secondary" type="submit">Delete building</button>
+    </form>
+  </header>
+
+  <table>
+    <thead><tr><th>Space</th><th>Kind</th><th>Capacity</th><th>Notes</th><th></th></tr></thead>
+    <tbody>
+      {% for space in building.spaces %}
+      <tr>
+        <td>{{ space.name }}</td>
+        <td>{{ space.kind }}</td>
+        <td>{{ space.capacity }}</td>
+        <td>{{ space.notes }}</td>
+        <td>
+          <form method="post" action="/spaces/{{ space.id }}/delete" onsubmit="return confirm('Delete {{ space.name }}?')">
+            <button class="secondary" type="submit">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5"><em>No spaces yet.</em></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <details>
+    <summary role="button" class="secondary">Add space to {{ building.name }}</summary>
+    <form method="post" action="/spaces">
+      <input type="hidden" name="building_id" value="{{ building.id }}" />
+      <div class="grid">
+        <label>Name<input name="name" required maxlength="100" /></label>
+        <label>Kind
+          <select name="kind">
+            {% for k in space_kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
+          </select>
+        </label>
+        <label>Capacity<input type="number" name="capacity" value="1" min="1" /></label>
+      </div>
+      <label>Notes<input name="notes" maxlength="500" /></label>
+      <button type="submit">Add space</button>
+    </form>
+  </details>
+</article>
+{% else %}
+<p><em>No buildings yet.</em></p>
+{% endfor %}
+{% endblock %}
