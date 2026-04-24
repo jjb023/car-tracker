@@ -192,7 +192,7 @@ def car_move(
 
 @router.get("/bookings")
 def bookings_page(request: Request, db: Session = Depends(get_db)):
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     stmt = (
         select(models.Booking)
         .options(
@@ -281,7 +281,7 @@ def _render_bookings_error(request: Request, db: Session, msg: str, form_locals:
         "notes": form_locals.get("notes", ""),
         "created_by": form_locals.get("created_by", ""),
     }
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     all_bookings = list(
         db.execute(
             select(models.Booking)
