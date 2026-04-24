@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Log in &middot; Car Tracker{% endblock %}
+{% block content %}
+<article style="max-width:420px;margin:3rem auto">
+  <header><strong>Log in</strong></header>
+  <form method="post" action="/login">
+    <label>Password
+      <input type="password" name="password" autofocus required />
+    </label>
+    {% if error %}<p style="color:var(--pico-del-color)">{{ error }}</p>{% endif %}
+    <button type="submit">Continue</button>
+  </form>
+</article>
+{% endblock %}
