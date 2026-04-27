@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from itertools import groupby
 from typing import Optional
 
@@ -192,7 +192,7 @@ def car_move(
 
 @router.get("/bookings")
 def bookings_page(request: Request, db: Session = Depends(get_db)):
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     stmt = (
         select(models.Booking)
         .options(
@@ -281,7 +281,7 @@ def _render_bookings_error(request: Request, db: Session, msg: str, form_locals:
         "notes": form_locals.get("notes", ""),
         "created_by": form_locals.get("created_by", ""),
     }
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     all_bookings = list(
         db.execute(
             select(models.Booking)
@@ -329,7 +329,157 @@ def booking_cancel(booking_id: int, db: Session = Depends(get_db)):
         pass
     return RedirectResponse(url="/bookings", status_code=status.HTTP_303_SEE_OTHER)
 
-
+# ---------- Calendar ----------
+ 
+# Visible window on the weekly grid. Bookings outside this range are clipped.
+CAL_DAY_START_HOUR = 6
+CAL_DAY_END_HOUR = 20  # exclusive
+CAL_HOUR_PX = 40
+CAL_VISIBLE_MINUTES = (CAL_DAY_END_HOUR - CAL_DAY_START_HOUR) * 60
+ 
+ 
+def _week_start_for(value: Optional[str]) -> datetime:
+    """Return Monday 00:00 of the week containing `value` (YYYY-MM-DD), or today's week."""
+    try:
+        d = date.fromisoformat(value) if value else datetime.now(timezone.utc).date()
+    except ValueError:
+        d = datetime.now(timezone.utc).date()
+    monday = d - timedelta(days=d.weekday())
+    return datetime.combine(monday, datetime.min.time())
+ 
+ 
+def _fetch_week_bookings(
+    db: Session, week_start: datetime, space_id: Optional[int] = None
+) -> list[models.Booking]:
+    week_end = week_start + timedelta(days=7)
+    stmt = (
+        select(models.Booking)
+        .options(
+            selectinload(models.Booking.car),
+            selectinload(models.Booking.space).selectinload(models.Space.building),
+        )
+        .where(
+            models.Booking.status == "active",
+            models.Booking.end_at > week_start,
+            models.Booking.start_at < week_end,
+        )
+        .order_by(models.Booking.start_at)
+    )
+    if space_id is not None:
+        stmt = stmt.where(models.Booking.space_id == space_id)
+    return list(db.execute(stmt).scalars())
+ 
+ 
+def _place_on_week(
+    bookings: list[models.Booking], week_start: datetime
+) -> list[list[dict]]:
+    """Return 7 lists (Mon..Sun) of chip dicts positioned within the visible day window."""
+    days: list[list[dict]] = [[] for _ in range(7)]
+    week_end = week_start + timedelta(days=7)
+    for b in bookings:
+        # Clip booking to the week window first.
+        b_start = max(b.start_at, week_start)
+        b_end = min(b.end_at, week_end)
+        # Split across day boundaries so a booking crossing midnight appears on both days.
+        cur = b_start
+        while cur < b_end:
+            day_idx = (cur.date() - week_start.date()).days
+            next_midnight = datetime.combine(cur.date() + timedelta(days=1), datetime.min.time())
+            seg_end = min(b_end, next_midnight)
+            # Clip to visible hours.
+            day_midnight = datetime.combine(cur.date(), datetime.min.time())
+            visible_start = day_midnight + timedelta(hours=CAL_DAY_START_HOUR)
+            visible_end = day_midnight + timedelta(hours=CAL_DAY_END_HOUR)
+            vis_start = max(cur, visible_start)
+            vis_end = min(seg_end, visible_end)
+            if vis_end > vis_start and 0 <= day_idx < 7:
+                start_min = (vis_start - visible_start).total_seconds() / 60
+                end_min = (vis_end - visible_start).total_seconds() / 60
+                top_px = start_min / 60 * CAL_HOUR_PX
+                height_px = max(20, (end_min - start_min) / 60 * CAL_HOUR_PX)
+                days[day_idx].append(
+                    {
+                        "booking": b,
+                        "top_px": round(top_px, 1),
+                        "height_px": round(height_px, 1),
+                        "clipped_start": cur > b.start_at or vis_start > cur,
+                        "clipped_end": seg_end < b.end_at or vis_end < seg_end,
+                    }
+                )
+            cur = seg_end
+    return days
+ 
+ 
+def _calendar_nav(week_start: datetime) -> dict:
+    return {
+        "week_start": week_start,
+        "week_end": week_start + timedelta(days=6),
+        "days": [week_start + timedelta(days=i) for i in range(7)],
+        "hours": list(range(CAL_DAY_START_HOUR, CAL_DAY_END_HOUR)),
+        "hour_px": CAL_HOUR_PX,
+        "total_height_px": (CAL_DAY_END_HOUR - CAL_DAY_START_HOUR) * CAL_HOUR_PX,
+        "prev_week": (week_start - timedelta(days=7)).date().isoformat(),
+        "next_week": (week_start + timedelta(days=7)).date().isoformat(),
+        "this_week": _week_start_for(None).date().isoformat(),
+        "today": datetime.now(timezone.utc).date(),
+    }
+ 
+ 
+@router.get("/calendar")
+def calendar_all(
+    request: Request, week: Optional[str] = None, db: Session = Depends(get_db)
+):
+    week_start = _week_start_for(week)
+    bookings = _fetch_week_bookings(db, week_start)
+    days = _place_on_week(bookings, week_start)
+    buildings = list(
+        db.execute(
+            select(models.Building)
+            .options(selectinload(models.Building.spaces))
+            .order_by(models.Building.name)
+        ).scalars()
+    )
+    return templates.TemplateResponse(
+        request,
+        "calendar.html",
+        _ctx(
+            request,
+            days_chips=days,
+            buildings=buildings,
+            **_calendar_nav(week_start),
+        ),
+    )
+ 
+ 
+@router.get("/spaces/{space_id}/calendar")
+def calendar_space(
+    request: Request,
+    space_id: int,
+    week: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    space = db.execute(
+        select(models.Space)
+        .options(selectinload(models.Space.building))
+        .where(models.Space.id == space_id)
+    ).scalar_one_or_none()
+    if space is None:
+        return RedirectResponse(url="/calendar", status_code=status.HTTP_303_SEE_OTHER)
+    week_start = _week_start_for(week)
+    bookings = _fetch_week_bookings(db, week_start, space_id=space_id)
+    days = _place_on_week(bookings, week_start)
+    return templates.TemplateResponse(
+        request,
+        "space_calendar.html",
+        _ctx(
+            request,
+            space=space,
+            days_chips=days,
+            **_calendar_nav(week_start),
+        ),
+    )
+ 
+ 
 # ---------- Admin (buildings + spaces) ----------
 
 

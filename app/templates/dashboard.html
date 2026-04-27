@@ -25,6 +25,7 @@
         <header>
           <strong>{{ space.name }}</strong>
           <small class="kind-{{ space.kind }}"> &middot; {{ space.kind }}</small>
+          <a class="space-cal-link" href="/spaces/{{ space.id }}/calendar">calendar &raquo;</a>
         </header>
         {% if cars %}
           <ul class="car-list">

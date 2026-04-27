@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ space.name }} &middot; Calendar{% endblock %}
+{% block content %}
+<hgroup>
+  <h2>{{ space.building.name }} &middot; {{ space.name }} <small class="kind-{{ space.kind }}">&middot; {{ space.kind }}</small></h2>
+  <p>Weekly bookings for this space. <a href="/calendar">&laquo; All spaces</a></p>
+</hgroup>
+
+<nav class="cal-nav">
+  <a role="button" class="secondary" href="/spaces/{{ space.id }}/calendar?week={{ prev_week }}">&laquo; Prev</a>
+  <a role="button" class="secondary outline" href="/spaces/{{ space.id }}/calendar?week={{ this_week }}">This week</a>
+  <a role="button" class="secondary" href="/spaces/{{ space.id }}/calendar?week={{ next_week }}">Next &raquo;</a>
+  <strong class="cal-range">{{ week_start.strftime("%d %b") }} &ndash; {{ week_end.strftime("%d %b %Y") }}</strong>
+</nav>
+
+{% set show_space = False %}
+{% include "_week_grid.html" with context %}
+{% endblock %}

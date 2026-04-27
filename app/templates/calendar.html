@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Calendar &middot; Car Tracker{% endblock %}
+{% block content %}
+<hgroup>
+  <h2>Calendar</h2>
+  <p>All bookings across every space, week at a glance.</p>
+</hgroup>
+
+<nav class="cal-nav">
+  <a role="button" class="secondary" href="/calendar?week={{ prev_week }}">&laquo; Prev</a>
+  <a role="button" class="secondary outline" href="/calendar?week={{ this_week }}">This week</a>
+  <a role="button" class="secondary" href="/calendar?week={{ next_week }}">Next &raquo;</a>
+  <strong class="cal-range">{{ week_start.strftime("%d %b") }} &ndash; {{ week_end.strftime("%d %b %Y") }}</strong>
+</nav>
+
+{% set show_space = True %}
+{% include "_week_grid.html" with context %}
+
+<details class="cal-legend">
+  <summary>Per-space calendars</summary>
+  <ul>
+    {% for building in buildings %}
+      {% for space in building.spaces %}
+        <li>
+          <a href="/spaces/{{ space.id }}/calendar">{{ building.name }} &middot; {{ space.name }}</a>
+          <small class="kind-{{ space.kind }}"> &middot; {{ space.kind }}</small>
+        </li>
+      {% endfor %}
+    {% endfor %}
+  </ul>
+</details>
+{% endblock %}

@@ -1,0 +1,40 @@
+{# Shared weekly calendar grid.
+   Expects: days, days_chips, hours, hour_px, total_height_px, today, show_space (bool) #}
+<div class="cal-grid" style="--cal-hour-px: {{ hour_px }}px; --cal-height: {{ total_height_px }}px;">
+  <div class="cal-corner"></div>
+  {% for day in days %}
+    <div class="cal-dayhead {% if day.date() == today %}cal-today{% endif %}">
+      <div class="cal-dayhead-name">{{ day.strftime("%a") }}</div>
+      <div class="cal-dayhead-date">{{ day.strftime("%d %b") }}</div>
+    </div>
+  {% endfor %}
+
+  <div class="cal-hours">
+    {% for h in hours %}
+      <div class="cal-hour-label">{{ "%02d:00"|format(h) }}</div>
+    {% endfor %}
+  </div>
+
+  {% for day_idx in range(7) %}
+    <div class="cal-day {% if days[day_idx].date() == today %}cal-today{% endif %}">
+      {% for h in hours %}
+        <div class="cal-hour-line" style="top: {{ loop.index0 * hour_px }}px;"></div>
+      {% endfor %}
+      {% for chip in days_chips[day_idx] %}
+        {% set b = chip.booking %}
+        <div class="cal-chip kind-{{ b.space.kind }}"
+             style="top: {{ chip.top_px }}px; height: {{ chip.height_px }}px;"
+             title="{{ b.start_at.strftime('%H:%M') }}&ndash;{{ b.end_at.strftime('%H:%M') }} &middot; {{ b.car.reg }} &middot; {{ b.space.building.name }} / {{ b.space.name }}{% if b.purpose %} &middot; {{ b.purpose }}{% endif %}">
+          <div class="cal-chip-time">
+            {% if chip.clipped_start %}&laquo;{% endif %}{{ b.start_at.strftime("%H:%M") }}&ndash;{{ b.end_at.strftime("%H:%M") }}{% if chip.clipped_end %}&raquo;{% endif %}
+          </div>
+          <div class="cal-chip-car"><a href="/cars/{{ b.car.id }}">{{ b.car.reg }}</a></div>
+          {% if show_space %}
+            <div class="cal-chip-space">{{ b.space.building.name }} &middot; {{ b.space.name }}</div>
+          {% endif %}
+          {% if b.purpose %}<div class="cal-chip-purpose">{{ b.purpose }}</div>{% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% endfor %}
+</div>
