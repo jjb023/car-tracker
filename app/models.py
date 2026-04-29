@@ -15,8 +15,8 @@ class Base(DeclarativeBase):
     pass
 
 
-SPACE_KINDS = ("general", "bay", "emissions", "dyno", "other")
-BOOKING_STATUSES = ("active", "cancelled")
+SPACE_KINDS = ("General", "Bay", "Emissions", "Dyno", "Other")
+BOOKING_STATUSES = ("Active", "Cancelled")
 
 
 class Building(Base):
@@ -40,7 +40,7 @@ class Space(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     building_id: Mapped[int] = mapped_column(ForeignKey("buildings.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(100))
-    kind: Mapped[str] = mapped_column(String(32), default="general")
+    kind: Mapped[str] = mapped_column(String(32), default="General")
     capacity: Mapped[int] = mapped_column(Integer, default=1)
     notes: Mapped[str] = mapped_column(String(500), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
@@ -99,6 +99,42 @@ class Booking(Base):
     status: Mapped[str] = mapped_column(String(16), default="active")
     created_by: Mapped[str] = mapped_column(String(100), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    # Snapshot of the TestType when booking was created, Editable per booking.
+    test_type_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("test_types.id", ondelete="SET NULL"), nullable=True
+    )
+
+    setup_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    test_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    analysis_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    down_minutes: Mapped[int] = mapped_column(Integer, default=0)
 
     car: Mapped[Car] = relationship()
     space: Mapped[Space] = relationship()
+    test_type: Mapped[Optional["TestType"]] = relationship()
+
+
+class TestType(Base):
+    __tablename__ = "test_types"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    # Blank = any space kind. Otherwise must match Space.kind.
+    space_kind: Mapped[str] = mapped_column(String(32), default="")
+    setup_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    test_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    analysis_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    down_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    notes: Mapped[str] = mapped_column(String(500), default="")
+    archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    @property
+    def total_minutes(self) -> int:
+        return (
+            self.setup_minutes +
+            self.test_minutes +
+            self.analysis_minutes +
+            self.down_minutes
+        )
+    
