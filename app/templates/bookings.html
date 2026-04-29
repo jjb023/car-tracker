@@ -9,38 +9,142 @@
 <article>
   <header><strong>New booking</strong></header>
   {% if error %}<p style="color:var(--pico-del-color)">{{ error }}</p>{% endif %}
-  <form method="post" action="/bookings">
+  <form method="post" action="/bookings" id="booking-form">
+  <div class="grid">
+    <label>Car
+      <select name="car_id" required>
+        {% for car in cars %}
+          <option value="{{ car.id }}" {% if form.car_id == car.id|string %}selected{% endif %}>{{ car.reg }} {% if car.make_model %}&mdash; {{ car.make_model }}{% endif %}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Test type
+      <select name="test_type_id" id="test-type-select">
+        <option value="" data-kind="" data-setup="0" data-test="0" data-analysis="0" data-down="0">(none — manual booking)</option>
+        {% for tt in test_types %}
+          <option value="{{ tt.id }}"
+                  data-kind="{{ tt.space_kind }}"
+                  data-setup="{{ tt.setup_minutes }}"
+                  data-test="{{ tt.test_minutes }}"
+                  data-analysis="{{ tt.analysis_minutes }}"
+                  data-down="{{ tt.down_minutes }}">
+            {{ tt.name }} ({{ tt.total_minutes }} min{% if tt.space_kind %}, {{ tt.space_kind }}{% endif %})
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <div class="grid">
+    <label>Space
+      <select name="space_id" id="space-select" required>
+        {% for building in buildings %}
+          <optgroup label="{{ building.name }}">
+            {% for space in building.spaces %}
+              <option value="{{ space.id }}" data-kind="{{ space.kind }}"
+                      {% if form.space_id == space.id|string %}selected{% endif %}>
+                {{ space.name }} ({{ space.kind }})
+              </option>
+            {% endfor %}
+          </optgroup>
+        {% endfor %}
+      </select>
+    </label>
+    <label>&nbsp;
+      <button type="button" id="suggest-btn" class="secondary">Suggest next slot</button>
+    </label>
+  </div>
+  <div class="grid">
+    <label>Start<input type="datetime-local" name="start_at" id="start-at" value="{{ form.start_at or '' }}" required /></label>
+    <label>End<input type="datetime-local" name="end_at" id="end-at" value="{{ form.end_at or '' }}" required /></label>
+  </div>
+  <details>
+    <summary>Phase breakdown <span id="phase-summary">(none)</span></summary>
     <div class="grid">
-      <label>Car
-        <select name="car_id" required>
-          {% for car in cars %}
-            <option value="{{ car.id }}" {% if form.car_id == car.id|string %}selected{% endif %}>{{ car.reg }} {% if car.make_model %}&mdash; {{ car.make_model }}{% endif %}</option>
-          {% endfor %}
-        </select>
-      </label>
-      <label>Space
-        <select name="space_id" required>
-          {% for building in buildings %}
-            <optgroup label="{{ building.name }}">
-              {% for space in building.spaces %}
-                <option value="{{ space.id }}" {% if form.space_id == space.id|string %}selected{% endif %}>{{ space.name }} ({{ space.kind }})</option>
-              {% endfor %}
-            </optgroup>
-          {% endfor %}
-        </select>
-      </label>
+      <label>Setup<input type="number" name="setup_minutes" id="setup-min" min="0" value="0" /></label>
+      <label>Test<input type="number" name="test_minutes" id="test-min" min="0" value="0" /></label>
+      <label>Analysis<input type="number" name="analysis_minutes" id="analysis-min" min="0" value="0" /></label>
+      <label>Down<input type="number" name="down_minutes" id="down-min" min="0" value="0" /></label>
     </div>
-    <div class="grid">
-      <label>Start<input type="datetime-local" name="start_at" value="{{ form.start_at or '' }}" required /></label>
-      <label>End<input type="datetime-local" name="end_at" value="{{ form.end_at or '' }}" required /></label>
-    </div>
-    <div class="grid">
-      <label>Purpose<input name="purpose" value="{{ form.purpose or '' }}" maxlength="200" placeholder="Dyno run, emissions test…" /></label>
-      <label>Booked by<input name="created_by" value="{{ form.created_by or '' }}" maxlength="100" placeholder="Your name / initials" /></label>
-    </div>
-    <label>Notes<textarea name="notes" rows="2" maxlength="1000">{{ form.notes or '' }}</textarea></label>
-    <button type="submit">Create booking</button>
-  </form>
+  </details>
+  <div class="grid">
+    <label>Purpose<input name="purpose" value="{{ form.purpose or '' }}" maxlength="200" /></label>
+    <label>Booked by<input name="created_by" value="{{ form.created_by or '' }}" maxlength="100" /></label>
+  </div>
+  <label>Notes<textarea name="notes" rows="2" maxlength="1000">{{ form.notes or '' }}</textarea></label>
+  <button type="submit">Create booking</button>
+</form>
+
+<script>
+(function () {
+  const ttSel = document.getElementById('test-type-select');
+  const spSel = document.getElementById('space-select');
+  const setup = document.getElementById('setup-min');
+  const test = document.getElementById('test-min');
+  const analysis = document.getElementById('analysis-min');
+  const down = document.getElementById('down-min');
+  const summary = document.getElementById('phase-summary');
+  const startEl = document.getElementById('start-at');
+  const endEl = document.getElementById('end-at');
+  const suggestBtn = document.getElementById('suggest-btn');
+
+  function totalMinutes() {
+    return (+setup.value) + (+test.value) + (+analysis.value) + (+down.value);
+  }
+
+  function refreshSummary() {
+    const total = totalMinutes();
+    summary.textContent = total
+      ? `(${total} min — ${setup.value}+${test.value}+${analysis.value}+${down.value})`
+      : '(none)';
+  }
+
+  function filterSpaces(kind) {
+    Array.from(spSel.querySelectorAll('option')).forEach(opt => {
+      const ok = !kind || opt.dataset.kind === kind;
+      opt.hidden = !ok;
+      opt.disabled = !ok;
+    });
+    if (spSel.selectedOptions[0] && spSel.selectedOptions[0].hidden) {
+      const first = Array.from(spSel.options).find(o => !o.hidden);
+      if (first) spSel.value = first.value;
+    }
+  }
+
+  ttSel.addEventListener('change', () => {
+    const o = ttSel.selectedOptions[0];
+    setup.value = o.dataset.setup || 0;
+    test.value = o.dataset.test || 0;
+    analysis.value = o.dataset.analysis || 0;
+    down.value = o.dataset.down || 0;
+    filterSpaces(o.dataset.kind || '');
+    refreshSummary();
+  });
+
+  [setup, test, analysis, down].forEach(el => el.addEventListener('input', refreshSummary));
+
+  suggestBtn.addEventListener('click', async () => {
+    const total = totalMinutes();
+    if (!spSel.value || total <= 0) {
+      alert('Pick a space and a test type (or enter phase minutes) first.');
+      return;
+    }
+    const url = `/api/spaces/${spSel.value}/next-slot?duration_minutes=${total}`;
+    const res = await fetch(url, { headers: { 'X-API-Key': '' /* if you require keys, surface it here */ } });
+    if (!res.ok) {
+      alert('No free slot found in the next 30 days.');
+      return;
+    }
+    const j = await res.json();
+    // Trim seconds for <input type="datetime-local">
+    startEl.value = j.start_at.slice(0, 16);
+    endEl.value = j.end_at.slice(0, 16);
+  });
+
+  // Init from current selection
+  filterSpaces(ttSel.selectedOptions[0]?.dataset.kind || '');
+  refreshSummary();
+})();
+</script>
 </article>
 
 <h3>Upcoming &amp; active</h3>

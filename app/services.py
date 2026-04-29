@@ -125,6 +125,12 @@ def create_booking(
     purpose: str = "",
     notes: str = "",
     created_by: str = "",
+    test_type_id: Optional[int] = None,
+    setup_minutes: int = 0,
+    test_minutes: int = 0,
+    analysis_minutes: int = 0,
+    down_minutes: int = 0,
+
 ) -> models.Booking:
     start_at = _as_naive_utc(start_at)
     end_at = _as_naive_utc(end_at)
@@ -150,6 +156,11 @@ def create_booking(
         purpose=purpose,
         notes=notes,
         created_by=created_by,
+        test_type_id=test_type_id,
+        setup_minutes=setup_minutes,
+        test_minutes=test_minutes,
+        analysis_minutes=analysis_minutes,
+        down_minutes=down_minutes,
     )
     db.add(booking)
     db.commit()

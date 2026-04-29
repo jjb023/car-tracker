@@ -70,4 +70,76 @@
 {% else %}
 <p><em>No buildings yet.</em></p>
 {% endfor %}
+
+<hr />
+<hgroup>
+  <h3>Test types</h3>
+  <p>Reusable booking templates: setup + test + analysis + down minutes.</p>
+</hgroup>
+
+<article>
+  <header><strong>Add test type</strong></header>
+  <form method="post" action="/test-types">
+    <div class="grid">
+      <label>Name<input name="name" required maxlength="100" placeholder="Cold-start emissions" /></label>
+      <label>Space kind
+        <select name="space_kind">
+          <option value="">(any)</option>
+          {% for k in space_kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    <div class="grid">
+      <label>Setup (min)<input type="number" name="setup_minutes" min="0" value="0" /></label>
+      <label>Test (min)<input type="number" name="test_minutes" min="0" value="0" /></label>
+      <label>Analysis (min)<input type="number" name="analysis_minutes" min="0" value="0" /></label>
+      <label>Down (min)<input type="number" name="down_minutes" min="0" value="0" /></label>
+    </div>
+    <label>Notes<input name="notes" maxlength="500" /></label>
+    <button type="submit">Add test type</button>
+  </form>
+</article>
+
+{% for tt in test_types %}
+<article>
+  <header>
+    <strong>{{ tt.name }}</strong>
+    <span style="float:right; color:var(--pico-muted-color)">
+      Total {{ tt.total_minutes }} min
+      {% if tt.space_kind %}&middot; {{ tt.space_kind }}{% endif %}
+    </span>
+  </header>
+  <form method="post" action="/test-types/{{ tt.id }}">
+    <div class="grid">
+      <label>Name<input name="name" value="{{ tt.name }}" required maxlength="100" /></label>
+      <label>Space kind
+        <select name="space_kind">
+          <option value="" {% if not tt.space_kind %}selected{% endif %}>(any)</option>
+          {% for k in space_kinds %}
+            <option value="{{ k }}" {% if tt.space_kind == k %}selected{% endif %}>{{ k }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <div class="grid">
+      <label>Setup<input type="number" name="setup_minutes" min="0" value="{{ tt.setup_minutes }}" /></label>
+      <label>Test<input type="number" name="test_minutes" min="0" value="{{ tt.test_minutes }}" /></label>
+      <label>Analysis<input type="number" name="analysis_minutes" min="0" value="{{ tt.analysis_minutes }}" /></label>
+      <label>Down<input type="number" name="down_minutes" min="0" value="{{ tt.down_minutes }}" /></label>
+    </div>
+    <label>Notes<input name="notes" value="{{ tt.notes }}" maxlength="500" /></label>
+    <div class="grid">
+      <button type="submit">Save</button>
+    </div>
+  </form>
+  <form method="post" action="/test-types/{{ tt.id }}/delete"
+        onsubmit="return confirm('Archive {{ tt.name }}? Existing bookings keep their snapshot.')">
+    <button class="secondary" type="submit">Archive</button>
+  </form>
+</article>
+{% else %}
+<p><em>No test types yet.</em></p>
+{% endfor %}
+
+
 {% endblock %}

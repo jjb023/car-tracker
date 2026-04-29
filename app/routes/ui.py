@@ -254,6 +254,11 @@ def booking_create(
     purpose: str = Form(""),
     notes: str = Form(""),
     created_by: str = Form(""),
+    test_type_id: str = Form(""),
+    setup_minutes: int = Form(0),
+    test_minutes: int = Form(0),
+    analysis_minutes: int = Form(0),
+    down_minutes: int = Form(0),
     db: Session = Depends(get_db),
 ):
     try:
@@ -263,6 +268,16 @@ def booking_create(
         return _render_bookings_error(
             request, db, "Invalid start/end time.", locals()
         )
+    
+    tt_id: Optional[int] = int(test_type_id) if test_type_id.strip() else None
+    if tt_id is not None and (setup_minutes + test_minutes + analysis_minutes + down_minutes) == 0:
+        tt = db.get(models.TestType, tt_id)
+        if tt is not None:
+            setup_minutes = tt.setup_minutes
+            test_minutes = tt.test_minutes
+            analysis_minutes = tt.analysis_minutes
+            down_minutes = tt.down_minutes
+
     try:
         services.create_booking(
             db,
@@ -273,6 +288,11 @@ def booking_create(
             purpose=purpose,
             notes=notes,
             created_by=created_by,
+            test_type_id=tt_id,
+            setup_minutes=setup_minutes,
+            test_minutes=test_minutes,
+            analysis_minutes=analysis_minutes,
+            down_minutes=down_minutes,
         )
     except services.ServiceError as exc:
         return _render_bookings_error(request, db, str(exc), locals())
@@ -500,10 +520,17 @@ def admin(request: Request, db: Session = Depends(get_db)):
             .order_by(models.Building.name)
         ).scalars()
     )
+    test_types = list(
+        db.execute(
+            select(models.TestType)
+            .where(models.TestType.archived.is_(False))
+            .order_by(models.TestType.name)
+        ).scalars()
+    )
     return templates.TemplateResponse(
         request,
         "admin.html",
-        _ctx(request, buildings=buildings, space_kinds=SPACE_KINDS, error=None),
+        _ctx(request, buildings=buildings, space_kinds=SPACE_KINDS, test_types=test_types, error=None),
     )
 
 
@@ -560,5 +587,73 @@ def space_delete(space_id: int, db: Session = Depends(get_db)):
     s = db.get(models.Space, space_id)
     if s is not None:
         db.delete(s)
+        db.commit()
+    return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/test-types")
+def test_type_create(
+    name: str = Form(...),
+    space_kind: str = Form(""),
+    setup_minutes: int = Form(0),
+    test_minutes: int = Form(0),
+    analysis_minutes: int = Form(0),
+    down_minutes: int = Form(0),
+    notes: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    name_clean = name.strip()
+    if not name_clean:
+        return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
+    if space_kind and space_kind not in SPACE_KINDS:
+        space_kind = ""
+    existing = db.execute(
+        select(models.TestType).where(models.TestType.name == name_clean)
+    ).scalar_one_or_none()
+    if existing is None:
+        db.add(models.TestType(
+            name=name_clean,
+            space_kind=space_kind,
+            setup_minutes=max(0, setup_minutes),
+            test_minutes=max(0, test_minutes),
+            analysis_minutes=max(0, analysis_minutes),
+            down_minutes=max(0, down_minutes),
+            notes=notes,
+        ))
+        db.commit()
+    return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/test-types/{test_type_id}")
+def test_type_edit(
+    test_type_id: int,
+    name: str = Form(...),
+    space_kind: str = Form(""),
+    setup_minutes: int = Form(0),
+    test_minutes: int = Form(0),
+    analysis_minutes: int = Form(0),
+    down_minutes: int = Form(0),
+    notes: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    tt = db.get(models.TestType, test_type_id)
+    if tt is not None:
+        tt.name = name.strip() or tt.name
+        tt.space_kind = space_kind if space_kind in SPACE_KINDS else ""
+        tt.setup_minutes = max(0, setup_minutes)
+        tt.test_minutes = max(0, test_minutes)
+        tt.analysis_minutes = max(0, analysis_minutes)
+        tt.down_minutes = max(0, down_minutes)
+        tt.notes = notes
+        db.commit()
+    return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/test-types/{test_type_id}/delete")
+def test_type_delete(test_type_id: int, db: Session = Depends(get_db)):
+    tt = db.get(models.TestType, test_type_id)
+    if tt is not None:
+        # Soft delete: keep history on bookings that referenced it
+        tt.archived = True
         db.commit()
     return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)

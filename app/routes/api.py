@@ -1,8 +1,9 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
+from datetime import datetime, timedelta
 
 from .. import models, schemas, services
 from ..auth import require_api_key
@@ -167,6 +168,11 @@ def create_booking(payload: schemas.BookingIn, db: Session = Depends(get_db)):
             purpose=payload.purpose,
             notes=payload.notes,
             created_by=payload.created_by,
+            test_type_id=payload.test_type_id,
+            setup_minutes=payload.setup_minutes,
+            test_minutes=payload.test_minutes,
+            analysis_minutes=payload.analysis_minutes,
+            down_minutes=payload.down_minutes,
         )
     except services.ServiceError as exc:
         raise HTTPException(409, str(exc))
@@ -185,3 +191,132 @@ def cancel_booking(booking_id: int, db: Session = Depends(get_db)):
         return services.cancel_booking(db, booking_id)
     except services.ServiceError as exc:
         raise HTTPException(404, str(exc))
+    
+    # ---------- Test types ----------
+
+
+@router.get(
+    "/test-types",
+    response_model=list[schemas.TestTypeOut],
+    summary="List test types (booking templates)",
+    description="Returns every configured test type with its phase durations. By default archived templates are hidden; set include_archived=true to also return them. Filter by space_kind to find tests valid for a given bed kind (e.g. 'dyno', 'emissions').",
+    operation_id="listTestTypes",
+)
+def list_test_types(
+    include_archived: bool = False,
+    space_kind: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    stmt = select(models.TestType).order_by(models.TestType.name)
+    if not include_archived:
+        stmt = stmt.where(models.TestType.archived.is_(False))
+    if space_kind:
+        # Empty space_kind on a TestType means 'any', so include those too
+        stmt = stmt.where(
+            (models.TestType.space_kind == space_kind) | (models.TestType.space_kind == "")
+        )
+    rows = list(db.execute(stmt).scalars())
+    return [
+        schemas.TestTypeOut.model_validate(
+            {**r.__dict__, "total_minutes": r.total_minutes}
+        )
+        for r in rows
+    ]
+
+
+@router.post(
+    "/test-types",
+    response_model=schemas.TestTypeOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a test type",
+    operation_id="createTestType",
+)
+def create_test_type(payload: schemas.TestTypeIn, db: Session = Depends(get_db)):
+    existing = db.execute(
+        select(models.TestType).where(models.TestType.name == payload.name)
+    ).scalar_one_or_none()
+    if existing is not None:
+        raise HTTPException(409, f"Test type {payload.name!r} already exists")
+    if payload.space_kind and payload.space_kind not in models.SPACE_KINDS:
+        raise HTTPException(400, f"Unknown space_kind {payload.space_kind!r}")
+    tt = models.TestType(**payload.model_dump())
+    db.add(tt)
+    db.commit()
+    db.refresh(tt)
+    return schemas.TestTypeOut.model_validate(
+        {**tt.__dict__, "total_minutes": tt.total_minutes}
+    )
+
+
+@router.post(
+    "/test-types/{test_type_id}",
+    response_model=schemas.TestTypeOut,
+    summary="Update a test type",
+    operation_id="updateTestType",
+)
+def update_test_type(
+    test_type_id: int, payload: schemas.TestTypeIn, db: Session = Depends(get_db)
+):
+    tt = db.get(models.TestType, test_type_id)
+    if tt is None:
+        raise HTTPException(404, "Test type not found")
+    if payload.space_kind and payload.space_kind not in models.SPACE_KINDS:
+        raise HTTPException(400, f"Unknown space_kind {payload.space_kind!r}")
+    for k, v in payload.model_dump().items():
+        setattr(tt, k, v)
+    db.commit()
+    db.refresh(tt)
+    return schemas.TestTypeOut.model_validate(
+        {**tt.__dict__, "total_minutes": tt.total_minutes}
+    )
+
+
+@router.post(
+    "/test-types/{test_type_id}/delete",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Archive a test type (soft delete)",
+    operation_id="archiveTestType",
+)
+def archive_test_type(test_type_id: int, db: Session = Depends(get_db)):
+    tt = db.get(models.TestType, test_type_id)
+    if tt is None:
+        raise HTTPException(404, "Test type not found")
+    tt.archived = True
+    db.commit()
+    return None
+
+
+# ---------- Next-slot helper ----------
+
+
+@router.get(
+    "/spaces/{space_id}/next-slot",
+    summary="Find the next free slot of a given length on a space",
+    description="Walks forward from `after` (defaults to now) and returns the earliest start time at which `duration_minutes` is unoccupied on the given space. Returns 404 if no gap is found within the search horizon.",
+    operation_id="nextSlot",
+)
+def next_slot(
+    space_id: int,
+    duration_minutes: int = Query(gt=0),
+    after: Optional[datetime] = None,
+    horizon_days: int = 30,
+    db: Session = Depends(get_db),
+):
+    if db.get(models.Space, space_id) is None:
+        raise HTTPException(404, "Space not found")
+    try:
+        start = services.next_available_slot(
+            db,
+            space_id=space_id,
+            duration_minutes=duration_minutes,
+            after=after,
+            horizon_days=horizon_days,
+        )
+    except services.ServiceError as exc:
+        raise HTTPException(400, str(exc))
+    if start is None:
+        raise HTTPException(404, f"No free {duration_minutes}-minute slot in {horizon_days} days")
+    return {
+        "start_at": start.isoformat(),
+        "end_at": (start + timedelta(minutes=duration_minutes)).isoformat(),
+    }
