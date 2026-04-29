@@ -130,3 +130,39 @@ class BookingOut(BaseModel):
     notes: str
     status: str
     created_by: str
+
+class TestTypeIn(BaseModel):
+    name: str = Field(min_length=1, max_length=100, examples=["Cold-start emissions"])
+    space_kind: str = Field(
+        default="",
+        description="If blank, can be used with any space. Otherwise, must match the Space.kind of the booked space.",
+        examples=["emissions"],
+    )
+    setup_minutes: int = Field(default=0, ge=0, examples=[15])
+    test_minutes: int = Field(default=0, ge=0, examples=[45])
+    analysis_minutes: int = Field(default=0, ge=0, examples=[20])
+    down_minutes: int = Field(default=0, ge=0, examples=[10])
+    notes: str = Field(default="", examples=[""])
+
+class TestTypeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    space_kind: str
+    setup_minutes: int
+    test_minutes: int
+    analysis_minutes: int
+    down_minutes: int
+    notes: str
+    archived: bool
+
+class NextSlotQuery(BaseModel):
+    space_id: int = Field(
+        description="Id of the space to check. Resolve from a space name via listSpaces first.",
+        examples=[3],
+    )
+    duration_minutes: int = Field(
+        description="Required continuous free time in minutes.",
+        examples=[60],
+    )
+    after: Optional[datetime] = None

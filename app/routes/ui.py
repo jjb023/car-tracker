@@ -221,6 +221,13 @@ def bookings_page(request: Request, db: Session = Depends(get_db)):
             .order_by(models.Building.name)
         ).scalars()
     )
+    test_types = list(
+        db.execute(
+            select(models.TestType)
+            .where(models.TestType.archived.is_(False))
+            .order_by(models.TestType.name)
+        ).scalars()
+    )
     return templates.TemplateResponse(
         request,
         "bookings.html",
@@ -230,6 +237,7 @@ def bookings_page(request: Request, db: Session = Depends(get_db)):
             past=past,
             cars=cars,
             buildings=buildings,
+            test_types=test_types,
             form={},
             error=None,
         ),

@@ -1,6 +1,7 @@
 """Shared business logic used by both the UI routes and the JSON API."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
+
 from typing import Optional
 
 from sqlalchemy import and_, select
@@ -78,6 +79,40 @@ def find_booking_conflict(
     if exclude_id is not None:
         stmt = stmt.where(models.Booking.id != exclude_id)
     return db.execute(stmt.limit(1)).scalar_one_or_none()
+
+
+def next_available_slot(
+    db: Session,
+    space_id: int,
+    duration_minutes: int,
+    after: Optional[datetime] = None,
+    horizon_days: int = 30,
+) -> Optional[datetime]:
+    """First gap >= duration on this space at/after `after`. None if none within horizon."""
+    if duration_minutes <= 0:
+        raise ServiceError("Total test duration must be greater than zero")
+    cur = _as_naive_utc(after or _now())
+    horizon = cur + timedelta(days=horizon_days)
+    duration = timedelta(minutes=duration_minutes)
+
+    stmt = (
+        select(models.Booking)
+        .where(
+            models.Booking.space_id == space_id,
+            models.Booking.status == "active",
+            models.Booking.end_at > cur,
+            models.Booking.start_at < horizon,
+        )
+        .order_by(models.Booking.start_at)
+    )
+    for b in db.execute(stmt).scalars():
+        if b.start_at - cur >= duration:
+            return cur
+        if b.end_at > cur:
+            cur = b.end_at
+    if horizon - cur >= duration:
+        return cur
+    return None
 
 
 def create_booking(
