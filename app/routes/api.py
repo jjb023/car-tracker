@@ -6,10 +6,10 @@ from sqlalchemy.orm import Session, selectinload
 from datetime import datetime, timedelta
 
 from .. import models, schemas, services
-from ..auth import require_api_key
+from ..auth import require_api_key_or_login
 from ..db import get_db
 
-router = APIRouter(prefix="/api", dependencies=[Depends(require_api_key)], tags=["api"])
+router = APIRouter(prefix="/api", dependencies=[Depends(require_api_key_or_login)], tags=["api"])
 
 
 def _car_to_out(db: Session, car: models.Car) -> schemas.CarOut:

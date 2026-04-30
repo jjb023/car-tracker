@@ -70,3 +70,12 @@ def redirect_after_login() -> RedirectResponse:
         secure=False,  # Cloudflare tunnel terminates TLS; cookie still travels over HTTPS to the client.
     )
     return resp
+
+def require_api_key_or_login(request: Request) -> None:
+    """Accept either a valid session cookie (browser) or a valid X-API-Key (programmatic)."""
+    if is_logged_in(request):
+        return
+    provided = request.headers.get("X-API-Key", "")
+    if hmac.compare_digest(provided.encode(), settings.api_key.encode()):
+        return
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
