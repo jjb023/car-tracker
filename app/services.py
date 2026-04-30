@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 
 from . import models
 
+BOOKING_STEP_MINUTES = 5
+
 
 class ServiceError(Exception):
     """Raised when an operation fails a business rule (409-ish)."""
@@ -26,6 +28,19 @@ def _as_naive_utc(dt: datetime) -> datetime:
             dt = dt - offset
         dt = dt.replace(tzinfo=None)
     return dt
+
+
+def _round_to_step(dt: datetime, *, up: bool = False) -> datetime:
+    """Round a datetime to the nearest BOOKING_STEP_MINUTES boundary.
+    Default is floor; pass up=True for ceil. Seconds/microseconds are dropped.
+    """
+    dt = dt.replace(second=0, microsecond=0)
+    rem = dt.minute % BOOKING_STEP_MINUTES
+    if rem == 0:
+        return dt
+    if up:
+        return dt + timedelta(minutes=BOOKING_STEP_MINUTES - rem)
+    return dt - timedelta(minutes=rem)
 
 
 def current_location(db: Session, car_id: int) -> Optional[models.CarLocation]:
@@ -91,7 +106,7 @@ def next_available_slot(
     """First gap >= duration on this space at/after `after`. None if none within horizon."""
     if duration_minutes <= 0:
         raise ServiceError("Total test duration must be greater than zero")
-    cur = _as_naive_utc(after or _now())
+    cur = _round_to_step(_as_naive_utc(after or _now()), up=True)
     horizon = cur + timedelta(days=horizon_days)
     duration = timedelta(minutes=duration_minutes)
 
@@ -109,7 +124,7 @@ def next_available_slot(
         if b.start_at - cur >= duration:
             return cur
         if b.end_at > cur:
-            cur = b.end_at
+            cur = _round_to_step(b.end_at, up=True)
     if horizon - cur >= duration:
         return cur
     return None
@@ -132,8 +147,8 @@ def create_booking(
     down_minutes: int = 0,
 
 ) -> models.Booking:
-    start_at = _as_naive_utc(start_at)
-    end_at = _as_naive_utc(end_at)
+    start_at = _round_to_step(_as_naive_utc(start_at))
+    end_at = _round_to_step(_as_naive_utc(end_at), up=True)
     if end_at <= start_at:
         raise ServiceError("End time must be after start time")
     if db.get(models.Car, car_id) is None:
@@ -163,6 +178,61 @@ def create_booking(
         down_minutes=down_minutes,
     )
     db.add(booking)
+    db.commit()
+    db.refresh(booking)
+    return booking
+
+
+def update_booking(
+    db: Session,
+    booking_id: int,
+    *,
+    car_id: int,
+    space_id: int,
+    start_at: datetime,
+    end_at: datetime,
+    purpose: str = "",
+    notes: str = "",
+    created_by: str = "",
+    test_type_id: Optional[int] = None,
+    setup_minutes: int = 0,
+    test_minutes: int = 0,
+    analysis_minutes: int = 0,
+    down_minutes: int = 0,
+) -> models.Booking:
+    booking = db.get(models.Booking, booking_id)
+    if booking is None:
+        raise ServiceError(f"Booking {booking_id} not found")
+    start_at = _round_to_step(_as_naive_utc(start_at))
+    end_at = _round_to_step(_as_naive_utc(end_at), up=True)
+    if end_at <= start_at:
+        raise ServiceError("End time must be after start time")
+    if db.get(models.Car, car_id) is None:
+        raise ServiceError(f"Car {car_id} not found")
+    if db.get(models.Space, space_id) is None:
+        raise ServiceError(f"Space {space_id} not found")
+
+    conflict = find_booking_conflict(
+        db, space_id, start_at, end_at, exclude_id=booking_id
+    )
+    if conflict is not None:
+        raise ServiceError(
+            f"Space already booked from {conflict.start_at:%Y-%m-%d %H:%M} "
+            f"to {conflict.end_at:%Y-%m-%d %H:%M}"
+        )
+    
+    booking.car_id = car_id
+    booking.space_id = space_id
+    booking.start_at = start_at
+    booking.end_at = end_at
+    booking.purpose = purpose
+    booking.notes = notes
+    booking.created_by = created_by
+    booking.test_type_id = test_type_id
+    booking.setup_minutes = setup_minutes
+    booking.test_minutes = test_minutes
+    booking.analysis_minutes = analysis_minutes
+    booking.down_minutes = down_minutes
     db.commit()
     db.refresh(booking)
     return booking

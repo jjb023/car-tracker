@@ -132,9 +132,13 @@
   font-size: 0.75rem;
   line-height: 1.15;
   overflow: hidden;
-  cursor: default;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  display: block;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
+.cal-chip:hover { filter: brightness(0.96); box-shadow: 0 2px 4px rgba(0,0,0,0.15); }
 .cal-chip.kind-emissions { background: #fef3c7; color: #b45309; }
 .cal-chip.kind-dyno      { background: #f3e8ff; color: #7e22ce; }
 .cal-chip.kind-bay       { background: #e0f2fe; color: #0369a1; }
@@ -167,3 +171,70 @@
   margin-left: 0.25rem;
 }
 
+/* ---------- Slot preview (booking form) ---------- */
+
+.slot-preview {
+  margin: 0.75rem 0 1rem;
+  border: 1px solid var(--pico-card-border-color);
+  border-radius: var(--pico-border-radius);
+  padding: 0.6rem 0.75rem;
+  background: var(--pico-card-background-color);
+}
+.slot-preview-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.4rem;
+}
+.slot-preview-grid {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  border: 1px solid var(--pico-card-border-color);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.sp-hours {
+  background: var(--pico-muted-border-color, #e5e7eb);
+  border-right: 1px solid var(--pico-card-border-color);
+}
+.sp-hour {
+  font-size: 0.7rem;
+  color: var(--pico-muted-color);
+  padding: 0 0.35rem;
+  border-bottom: 1px dashed var(--pico-card-border-color);
+  display: flex;
+  align-items: flex-start;
+}
+.sp-day {
+  position: relative;
+}
+.sp-chip {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  background: var(--pico-card-sectioning-background-color, #eef2ff);
+  color: var(--pico-muted-color);
+  border-left: 3px solid var(--pico-muted-color);
+  border-radius: 4px;
+  font-size: 0.72rem;
+  padding: 2px 4px;
+  overflow: hidden;
+}
+.sp-preview {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  background: rgba(56, 161, 105, 0.12);
+  border: 2px dashed #38a169;
+  color: #276749;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 4px;
+  z-index: 2;
+}
+.slot-preview-hint {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--pico-muted-color);
+}

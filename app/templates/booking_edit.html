@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Edit booking &middot; Car Tracker{% endblock %}
+{% block content %}
+{% if booking is none %}
+  <p>Booking not found. <a href="/bookings">Back to bookings</a></p>
+{% else %}
+<hgroup>
+  <h2>Edit booking #{{ booking.id }}</h2>
+  <p>{{ booking.car.reg }} &middot; {{ booking.space.building.name }} / {{ booking.space.name }}</p>
+</hgroup>
+
+<article>
+  {% if error %}<p style="color:var(--pico-del-color)">{{ error }}</p>{% endif %}
+  <form method="post" action="/bookings/{{ booking.id }}">
+    <div class="grid">
+      <label>Car
+        <select name="car_id" required>
+          {% for car in cars %}
+            <option value="{{ car.id }}" {% if car.id == booking.car_id %}selected{% endif %}>
+              {{ car.reg }}{% if car.make_model %} &mdash; {{ car.make_model }}{% endif %}
+            </option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Test type
+        <select name="test_type_id">
+          <option value="">(none — manual booking)</option>
+          {% for tt in test_types %}
+            <option value="{{ tt.id }}" {% if booking.test_type_id == tt.id %}selected{% endif %}>
+              {{ tt.name }} ({{ tt.total_minutes }} min{% if tt.space_kind %}, {{ tt.space_kind }}{% endif %})
+            </option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <label>Space
+      <select name="space_id" required>
+        {% for building in buildings %}
+          <optgroup label="{{ building.name }}">
+            {% for space in building.spaces %}
+              <option value="{{ space.id }}" {% if space.id == booking.space_id %}selected{% endif %}>
+                {{ space.name }} ({{ space.kind }})
+              </option>
+            {% endfor %}
+          </optgroup>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="grid">
+      <label>Start
+        <input type="datetime-local" name="start_at" step="300"
+               value="{{ booking.start_at.strftime('%Y-%m-%dT%H:%M') }}" required />
+      </label>
+      <label>End
+        <input type="datetime-local" name="end_at" id="end-at" step="300"
+               value="{{ booking.end_at.strftime('%Y-%m-%dT%H:%M') }}" required />
+      </label>
+    </div>
+    <details {% if booking.setup_minutes or booking.test_minutes or booking.analysis_minutes or booking.down_minutes %}open{% endif %}>
+      <summary>Phase breakdown</summary>
+      <div class="grid">
+        <label>Setup<input type="number" name="setup_minutes" min="0" value="{{ booking.setup_minutes }}" /></label>
+        <label>Test<input type="number" name="test_minutes" min="0" value="{{ booking.test_minutes }}" /></label>
+        <label>Analysis<input type="number" name="analysis_minutes" min="0" value="{{ booking.analysis_minutes }}" /></label>
+        <label>Down<input type="number" name="down_minutes" min="0" value="{{ booking.down_minutes }}" /></label>
+      </div>
+    </details>
+    <div class="grid">
+      <label>Purpose<input name="purpose" value="{{ booking.purpose }}" maxlength="200" /></label>
+      <label>Booked by<input name="created_by" value="{{ booking.created_by }}" maxlength="100" /></label>
+    </div>
+    <label>Notes<textarea name="notes" rows="2" maxlength="1000">{{ booking.notes }}</textarea></label>
+    <div class="grid">
+      <button type="submit">Save changes</button>
+      <a role="button" class="secondary outline" href="/bookings">Cancel</a>
+    </div>
+  </form>
+
+  <form method="post" action="/bookings/{{ booking.id }}/cancel"
+        onsubmit="return confirm('Cancel this booking?')" style="margin-top:0.5rem">
+    <button class="secondary" type="submit">Cancel this booking</button>
+  </form>
+</article>
+
+<script>
+(function () {
+  const start = document.querySelector('input[name=start_at]');
+  const end = document.getElementById('end-at');
+  const fields = ['setup_minutes','test_minutes','analysis_minutes','down_minutes']
+      .map(n => document.querySelector(`input[name=${n}]`));
+  function total() { return fields.reduce((s,f)=>s+(+f.value||0),0); }
+  function pad(n){return String(n).padStart(2,'0');}
+  function recompute() {
+    const t = total();
+    if (!start.value || t <= 0) return;
+    const s = new Date(start.value);
+    const e = new Date(s.getTime() + t * 60000);
+    end.value = `${e.getFullYear()}-${pad(e.getMonth()+1)}-${pad(e.getDate())}T${pad(e.getHours())}:${pad(e.getMinutes())}`;
+  }
+  fields.forEach(f => f.addEventListener('input', recompute));
+  start.addEventListener('input', recompute);
+})();
+</script>
+{% endif %}
+{% endblock %}

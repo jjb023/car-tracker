@@ -22,18 +22,19 @@
       {% endfor %}
       {% for chip in days_chips[day_idx] %}
         {% set b = chip.booking %}
-        <div class="cal-chip kind-{{ b.space.kind }}"
+        <a class="cal-chip kind-{{ b.space.kind }}"
+             href="/bookings/{{ b.id }}/edit"
              style="top: {{ chip.top_px }}px; height: {{ chip.height_px }}px;"
              title="{{ b.start_at.strftime('%H:%M') }}&ndash;{{ b.end_at.strftime('%H:%M') }} &middot; {{ b.car.reg }} &middot; {{ b.space.building.name }} / {{ b.space.name }}{% if b.purpose %} &middot; {{ b.purpose }}{% endif %}">
           <div class="cal-chip-time">
             {% if chip.clipped_start %}&laquo;{% endif %}{{ b.start_at.strftime("%H:%M") }}&ndash;{{ b.end_at.strftime("%H:%M") }}{% if chip.clipped_end %}&raquo;{% endif %}
           </div>
-          <div class="cal-chip-car"><a href="/cars/{{ b.car.id }}">{{ b.car.reg }}</a></div>
+          <div class="cal-chip-car">{{ b.car.reg }}</div>
           {% if show_space %}
             <div class="cal-chip-space">{{ b.space.building.name }} &middot; {{ b.space.name }}</div>
           {% endif %}
           {% if b.purpose %}<div class="cal-chip-purpose">{{ b.purpose }}</div>{% endif %}
-        </div>
+        </a>
       {% endfor %}
     </div>
   {% endfor %}

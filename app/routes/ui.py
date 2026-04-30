@@ -357,6 +357,134 @@ def booking_cancel(booking_id: int, db: Session = Depends(get_db)):
         pass
     return RedirectResponse(url="/bookings", status_code=status.HTTP_303_SEE_OTHER)
 
+
+@router.get("/bookings/{booking_id}/edit")
+def booking_edit_page(
+    request: Request, booking_id: int, db: Session = Depends(get_db)
+):
+    booking = db.execute(
+        select(models.Booking)
+        .options(
+            selectinload(models.Booking.car),
+            selectinload(models.Booking.space).selectinload(models.Space.building),
+        )
+        .where(models.Booking.id == booking_id)
+    ).scalar_one_or_none()
+    if booking is None:
+        return RedirectResponse(url="/bookings", status_code=status.HTTP_303_SEE_OTHER)
+    cars = list(
+        db.execute(
+            select(models.Car).where(models.Car.archived.is_(False)).order_by(models.Car.reg)
+        ).scalars()
+    )
+    buildings = list(
+        db.execute(
+            select(models.Building)
+            .options(selectinload(models.Building.spaces))
+            .order_by(models.Building.name)
+        ).scalars()
+    )
+    test_types = list(
+        db.execute(
+            select(models.TestType)
+            .where(models.TestType.archived.is_(False))
+            .order_by(models.TestType.name)
+        ).scalars()
+    )
+    return templates.TemplateResponse(
+        request,
+        "booking_edit.html",
+        _ctx(
+            request,
+            booking=booking,
+            cars=cars,
+            buildings=buildings,
+            test_types=test_types,
+            error=None,
+        ),
+    )
+
+
+@router.post("/bookings/{booking_id}")
+def booking_update(
+    request: Request,
+    booking_id: int,
+    car_id: int = Form(...),
+    space_id: int = Form(...),
+    start_at: str = Form(...),
+    end_at: str = Form(...),
+    purpose: str = Form(""),
+    notes: str = Form(""),
+    created_by: str = Form(""),
+    test_type_id: str = Form(""),
+    setup_minutes: int = Form(0),
+    test_minutes: int = Form(0),
+    analysis_minutes: int = Form(0),
+    down_minutes: int = Form(0),
+    db: Session = Depends(get_db),
+):
+    try:
+        start_dt = _parse_local_dt(start_at)
+        end_dt = _parse_local_dt(end_at)
+    except ValueError:
+        return _render_edit_error(request, db, booking_id, "Invalid start/end time.")
+    tt_id: Optional[int] = int(test_type_id) if test_type_id.strip() else None
+    try:
+        services.update_booking(
+            db,
+            booking_id,
+            car_id=car_id,
+            space_id=space_id,
+            start_at=start_dt,
+            end_at=end_dt,
+            purpose=purpose,
+            notes=notes,
+            created_by=created_by,
+            test_type_id=tt_id,
+            setup_minutes=setup_minutes,
+            test_minutes=test_minutes,
+            analysis_minutes=analysis_minutes,
+            down_minutes=down_minutes,
+        )
+    except services.ServiceError as exc:
+        return _render_edit_error(request, db, booking_id, str(exc))
+    return RedirectResponse(url="/bookings", status_code=status.HTTP_303_SEE_OTHER)
+
+
+def _render_edit_error(request: Request, db: Session, booking_id: int, msg: str):
+    booking = db.execute(
+        select(models.Booking)
+        .options(
+            selectinload(models.Booking.car),
+            selectinload(models.Booking.space).selectinload(models.Space.building),
+        )
+        .where(models.Booking.id == booking_id)
+    ).scalar_one_or_none()
+    cars = list(db.execute(select(models.Car).order_by(models.Car.reg)).scalars())
+    buildings = list(
+        db.execute(
+            select(models.Building)
+            .options(selectinload(models.Building.spaces))
+            .order_by(models.Building.name)
+        ).scalars()
+    )
+    test_types = list(
+        db.execute(
+            select(models.TestType)
+            .where(models.TestType.archived.is_(False))
+            .order_by(models.TestType.name)
+        ).scalars()
+    )
+    return templates.TemplateResponse(
+        request,
+        "booking_edit.html",
+        _ctx(
+            request, booking=booking, cars=cars, buildings=buildings,
+            test_types=test_types, error=msg,
+        ),
+        status_code=status.HTTP_409_CONFLICT,
+    )
+
 # ---------- Calendar ----------
  
 # Visible window on the weekly grid. Bookings outside this range are clipped.

@@ -54,9 +54,21 @@
     </label>
   </div>
   <div class="grid">
-    <label>Start<input type="datetime-local" name="start_at" id="start-at" value="{{ form.start_at or '' }}" required /></label>
-    <label>End<input type="datetime-local" name="end_at" id="end-at" value="{{ form.end_at or '' }}" required /></label>
+    <label>Start<input type="datetime-local" name="start_at" id="start-at" step="300" value="{{ form.start_at or '' }}" required /></label>
+    <label>End <small>(auto from test type)</small>
+      <input type="datetime-local" name="end_at" id="end-at" step="300" value="{{ form.end_at or '' }}" required readonly />
+    </label>
   </div>
+  
+  <div id="slot-preview" class="slot-preview" hidden>
+    <div class="slot-preview-head">
+      <strong id="slot-preview-title">Space preview</strong>
+      <small id="slot-preview-day"></small>
+    </div>
+    <div id="slot-preview-grid" class="slot-preview-grid"></div>
+    <small class="slot-preview-hint">Existing bookings on this space for the selected day. The dashed chip is your booking — drag the start time to reposition.</small>
+  </div>
+
   <details>
     <summary>Phase breakdown <span id="phase-summary">(none)</span></summary>
     <div class="grid">
@@ -86,6 +98,15 @@
   const startEl = document.getElementById('start-at');
   const endEl = document.getElementById('end-at');
   const suggestBtn = document.getElementById('suggest-btn');
+  const previewBox = document.getElementById('slot-preview');
+  const previewGrid = document.getElementById('slot-preview-grid');
+  const previewTitle = document.getElementById('slot-preview-title');
+  const previewDay = document.getElementById('slot-preview-day');
+
+  const DAY_START_HOUR = 6;
+  const DAY_END_HOUR = 20;
+  const HOUR_PX = 36;
+  const STEP_MIN = 5;
 
   function totalMinutes() {
     return (+setup.value) + (+test.value) + (+analysis.value) + (+down.value);
@@ -96,6 +117,25 @@
     summary.textContent = total
       ? `(${total} min — ${setup.value}+${test.value}+${analysis.value}+${down.value})`
       : '(none)';
+  }
+
+  function roundToStep(date, up) {
+    const ms = STEP_MIN * 60 * 1000;
+    const t = date.getTime();
+    return new Date(up ? Math.ceil(t / ms) * ms : Math.floor(t / ms) * ms);
+  }
+
+  function fmtLocal(d) {
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function recomputeEnd() {
+    const total = totalMinutes();
+    if (!startEl.value || total <= 0) return;
+    const start = new Date(startEl.value);
+    const end = new Date(start.getTime() + total * 60000);
+    endEl.value = fmtLocal(end);
   }
 
   function filterSpaces(kind) {
@@ -118,9 +158,16 @@
     down.value = o.dataset.down || 0;
     filterSpaces(o.dataset.kind || '');
     refreshSummary();
+    recomputeEnd();
+    refreshPreview();
   });
 
-  [setup, test, analysis, down].forEach(el => el.addEventListener('input', refreshSummary));
+  [setup, test, analysis, down].forEach(el => el.addEventListener('input', () => {
+    refreshSummary(); recomputeEnd(); refreshPreview();
+  }));
+
+  startEl.addEventListener('input', () => { recomputeEnd(); refreshPreview(); });
+  spSel.addEventListener('change', () => { loadSpaceBookings().then(refreshPreview); });
 
   suggestBtn.addEventListener('click', async () => {
     const total = totalMinutes();
@@ -129,20 +176,92 @@
       return;
     }
     const url = `/api/spaces/${spSel.value}/next-slot?duration_minutes=${total}`;
-    const res = await fetch(url, { headers: { 'X-API-Key': '' /* if you require keys, surface it here */ } });
+    const res = await fetch(url);
     if (!res.ok) {
       alert('No free slot found in the next 30 days.');
       return;
     }
     const j = await res.json();
-    // Trim seconds for <input type="datetime-local">
     startEl.value = j.start_at.slice(0, 16);
     endEl.value = j.end_at.slice(0, 16);
+    refreshPreview();
   });
+
+// ---- Mini preview calendar ----
+  let cachedSpaceId = null;
+  let cachedBookings = [];
+
+  async function loadSpaceBookings() {
+    if (!spSel.value) { cachedBookings = []; return; }
+    if (cachedSpaceId === spSel.value) return;
+    const res = await fetch(`/api/bookings?space_id=${spSel.value}&active_only=true`);
+    if (!res.ok) { cachedBookings = []; return; }
+    cachedBookings = await res.json();
+    cachedSpaceId = spSel.value;
+  }
+
+  function minutesFromDayStart(dt) {
+    return (dt.getHours() - DAY_START_HOUR) * 60 + dt.getMinutes();
+  }
+
+  function refreshPreview() {
+    if (!startEl.value || !spSel.value) {
+      previewBox.hidden = true;
+      return;
+    }
+    const start = new Date(startEl.value);
+    const total = totalMinutes() || 60;
+    const end = new Date(start.getTime() + total * 60000);
+    const dayStart = new Date(start); dayStart.setHours(DAY_START_HOUR, 0, 0, 0);
+    const dayEnd = new Date(start); dayEnd.setHours(DAY_END_HOUR, 0, 0, 0);
+    const visMin = (DAY_END_HOUR - DAY_START_HOUR) * 60;
+    const totalH = visMin / 60 * HOUR_PX;
+
+    previewBox.hidden = false;
+    previewTitle.textContent =
+      spSel.selectedOptions[0]?.textContent.trim() || 'Space preview';
+    previewDay.textContent = start.toLocaleDateString(undefined,
+      { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' });
+
+    // Build hour grid + chips
+    let html = `<div class="sp-hours">`;
+    for (let h = DAY_START_HOUR; h < DAY_END_HOUR; h++) {
+      html += `<div class="sp-hour" style="height:${HOUR_PX}px">`
+           +  `<span>${String(h).padStart(2,'0')}:00</span></div>`;
+    }
+    html += `</div><div class="sp-day" style="height:${totalH}px">`;
+
+    const sameDay = (a, b) => a.toDateString() === b.toDateString();
+    cachedBookings.forEach(b => {
+      const bs = new Date(b.start_at);
+      const be = new Date(b.end_at);
+      if (!sameDay(bs, start) && !sameDay(be, start)) return;
+      const top = Math.max(0, minutesFromDayStart(bs)) / 60 * HOUR_PX;
+      const bot = Math.min(visMin, minutesFromDayStart(be)) / 60 * HOUR_PX;
+      const h = Math.max(14, bot - top);
+      html += `<div class="sp-chip" style="top:${top}px;height:${h}px"
+                title="${bs.toTimeString().slice(0,5)}–${be.toTimeString().slice(0,5)}">
+                ${bs.toTimeString().slice(0,5)}–${be.toTimeString().slice(0,5)}
+              </div>`;
+    });
+    // Preview chip
+    const ptop = Math.max(0, minutesFromDayStart(start)) / 60 * HOUR_PX;
+    const pbot = Math.min(visMin, minutesFromDayStart(end)) / 60 * HOUR_PX;
+    const ph = Math.max(14, pbot - ptop);
+    html += `<div class="sp-preview" style="top:${ptop}px;height:${ph}px">
+              ${start.toTimeString().slice(0,5)}–${end.toTimeString().slice(0,5)} (preview)
+            </div>`;
+    html += `</div>`;
+    previewGrid.innerHTML = html;
+  }
+
+
+
 
   // Init from current selection
   filterSpaces(ttSel.selectedOptions[0]?.dataset.kind || '');
   refreshSummary();
+  loadSpaceBookings().then(refreshPreview);
 })();
 </script>
 </article>
@@ -163,6 +282,7 @@
             <td>{{ b.purpose }}</td>
             <td>{{ b.created_by }}</td>
             <td>
+              <a role="button" class="secondary outline" href="/bookings/{{ b.id }}/edit">Edit</a>
               <form method="post" action="/bookings/{{ b.id }}/cancel" onsubmit="return confirm('Cancel this booking?')">
                 <button class="secondary" type="submit">Cancel</button>
               </form>
@@ -197,3 +317,4 @@
 </details>
 {% endif %}
 {% endblock %}
+
